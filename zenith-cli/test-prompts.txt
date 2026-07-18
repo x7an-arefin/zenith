@@ -1,0 +1,11 @@
+# Zenith CLI — Batch Prompts File
+# Lines starting with # are comments
+# One prompt per line
+
+a cyberpunk city at night with neon lights and flying cars
+a serene mountain landscape at sunrise, oil painting style
+a cute robot reading a book in a cozy library
+an underwater coral reef with tropical fish, photorealistic
+a steampunk airship above clouds, detailed digital art
+
+# Add your own prompts below!

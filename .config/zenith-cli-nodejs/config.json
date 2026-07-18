@@ -1,0 +1,16 @@
+{
+	"providers": {
+		"gitee": {
+			"tokens": [
+				"gitee_demo_002",
+				"gitee_demo_003"
+			]
+		}
+	},
+	"defaultProvider": "huggingface",
+	"defaultModel": "z-image-turbo",
+	"defaultWidth": 1024,
+	"defaultHeight": 1024,
+	"outputDir": "./output",
+	"openAfterGenerate": true
+}
