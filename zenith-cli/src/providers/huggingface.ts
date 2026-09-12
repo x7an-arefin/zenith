@@ -102,7 +102,7 @@ async function callGradioApi(
     throw new Error('HuggingFace Gradio API: empty result after retries')
   }
 
-  // Parse SSE "complete" event
+  // Parse SSE "complete" or "error" event
   const lines = text.split('\n')
   let currentEvent = ''
   for (const line of lines) {
@@ -114,6 +114,11 @@ async function callGradioApi(
       if (Array.isArray(parsed)) return parsed
       if (parsed && typeof parsed === 'object' && Array.isArray(parsed.data)) return parsed.data
       throw new Error(`Unexpected complete payload: ${jsonData.slice(0, 200)}`)
+    } else if (line.startsWith('data:') && currentEvent === 'error') {
+      const jsonData = line.substring(5).trim()
+      if (jsonData.includes('ZeroGPU quota')) {
+        throw new Error(`ZEROGPU_QUOTA: ${jsonData}`)
+      }
     }
   }
 
@@ -151,23 +156,34 @@ export async function generateHuggingFace(
   const modelId = request.model || 'z-image-turbo'
   const config = MODEL_CONFIGS[modelId] ?? MODEL_CONFIGS['z-image-turbo']
 
-  spinner.text = `Generating image with model: ${modelId} (seed: ${seed})...`
+  const MAX_ATTEMPTS = 5
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    spinner.text = `Generating image with model: ${modelId} (seed: ${seed}, attempt ${attempt + 1}/${MAX_ATTEMPTS})...`
 
-  try {
-    const baseUrl = HF_SPACES[modelId] ?? HF_SPACES['z-image-turbo']
-    const data = config.buildData(request, seed)
-    const result = await callGradioApi(baseUrl, config.endpoint, data, token)
-    const imageUrl = parseImageUrl(baseUrl, result[0])
+    try {
+      const baseUrl = HF_SPACES[modelId] ?? HF_SPACES['z-image-turbo']
+      const data = config.buildData(request, seed)
+      const result = await callGradioApi(baseUrl, config.endpoint, data, token)
+      const imageUrl = parseImageUrl(baseUrl, result[0])
 
-    spinner.succeed('Image generated successfully')
-    return {
-      url: imageUrl,
-      seed,
-      model: modelId,
+      spinner.succeed('Image generated successfully')
+      return {
+        url: imageUrl,
+        seed,
+        model: modelId,
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      if ((message.includes('ZEROGPU_QUOTA') || message.includes('ZeroGPU quota')) && attempt < MAX_ATTEMPTS - 1) {
+        spinner.text = `ZeroGPU quota reached. Retrying in 10s...`
+        await sleep(10000)
+        continue
+      }
+      spinner.fail(`Generation failed: ${message}`)
+      throw err
     }
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    spinner.fail(`Generation failed: ${message}`)
-    throw err
   }
+
+  throw new Error('Failed after max retries')
 }
+
